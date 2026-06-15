@@ -2,11 +2,13 @@
 name: research-project-init
 description: >
   Scaffolds a new Python or Rust research project with the full standard toolchain.
-  Use this skill whenever the user wants to start a new project, create a new repo,
-  initialise a codebase, or set up a package. Triggers on phrases like "new project",
-  "set up a repo", "initialise a project", "scaffold", or "start a codebase". Always
-  use this skill — do not scaffold projects from memory, as the toolchain and structure
-  are precisely specified here.
+  Also bootstraps Claude Code infrastructure (hooks, agents, settings) on existing
+  or forked repos that lack it. Use this skill whenever the user wants to start a
+  new project, create a new repo, initialise a codebase, set up a package, or
+  bootstrap a forked repo. Triggers on phrases like "new project", "set up a repo",
+  "initialise a project", "scaffold", "start a codebase", or "set up hooks on this
+  repo". Always use this skill — do not scaffold projects from memory, as the
+  toolchain and structure are precisely specified here.
 ---
 
 # Research Project Init Skill
@@ -44,7 +46,80 @@ Both toolchains are active. Python bindings to Rust are handled via `maturin` an
 
 ---
 
-## Step-by-step init procedure
+## Bootstrap forked or existing repos
+
+When the human opens a repo that is already populated (forked, cloned, or
+otherwise pre-existing) but lacks the Claude Code infrastructure, skip the
+full scaffold and run only the bootstrap procedure below. **This procedure
+must be run at session start on any forked repo that does not already have
+`.claude/hooks/pre-commit-gate.sh`.**
+
+### B1 — Detect what is missing
+
+Check each of the following. Only create what does not already exist.
+
+```
+.claude/
+.claude/settings.json
+.claude/hooks/pre-commit-gate.sh
+.claude/agents/implementer.md
+.claude/agents/test-writer.md
+.claude/agents/physics-reviewer.md   (if physics project)
+CLAUDE.md
+```
+
+### B2 — Create `.claude/` and `settings.json`
+
+```bash
+mkdir -p .claude
+```
+
+Write `.claude/settings.json` using the template from the `hooks` skill.
+Invoke the `hooks` skill to do this — do not write it from memory.
+
+### B3 — Write the pre-commit gate hook
+
+Write `.claude/hooks/pre-commit-gate.sh` using the template from the `hooks`
+skill. Make it executable: `chmod +x .claude/hooks/pre-commit-gate.sh`.
+
+The hook template in the `hooks` skill is the canonical source. It includes:
+- Python checks (ruff, ty, pytest) if `pyproject.toml` exists
+- Rust checks (`cargo fmt --check`, `cargo clippy -- -D warnings`, `cargo test`)
+  if `Cargo.toml` exists
+- `notes/` guard — blocks commits of private working notes
+- **Branch guard** — blocks commits directly to `main`
+
+### B4 — Install agent definitions
+
+Invoke the `agent-team` skill to write agent definition files into
+`.claude/agents/`. This step is language-agnostic: the agent-team skill
+detects the project language from the repo contents.
+
+### B5 — Generate or verify CLAUDE.md
+
+Invoke the `project-md` skill to generate `CLAUDE.md`. If one already
+exists, verify it covers the required sections (project type, physics
+context, toolchain, conventions) and offer to update it.
+
+### B6 — Verify the gate
+
+Run the gate checks appropriate for the project language and confirm they
+pass before proceeding to any implementation work:
+
+**Rust:** `cargo fmt --check && cargo clippy -- -D warnings && cargo test`
+**Python:** `uv run ruff check . && uv run ruff format --check . && uv run ty check && uv run pytest`
+
+Commit the infrastructure:
+
+```bash
+git add .claude/ CLAUDE.md
+git commit -m "chore: bootstrap Claude Code infrastructure on forked repo"
+git push
+```
+
+---
+
+## Step-by-step init procedure (new projects)
 
 ### 1 — Gather inputs
 
